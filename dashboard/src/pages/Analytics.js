@@ -18,8 +18,8 @@ import {
   Cell,
 } from 'recharts';
 import {
-  TrendingUpOutlined,
-  TrendingDownOutlined,
+  ArrowUpOutlined,
+  ArrowDownOutlined,
   ClockCircleOutlined,
   CheckCircleOutlined,
 } from '@ant-design/icons';
@@ -28,184 +28,113 @@ const { RangePicker } = DatePicker;
 const { Option } = Select;
 
 const Analytics = () => {
-  const [timeRange, setTimeRange] = useState('7d');
-  const [selectedMetric, setSelectedMetric] = useState('incidents');
+  const [timeRange, setTimeRange] = useState('24h');
 
-  // Mock analytics data
-  const performanceData = [
-    { date: '2024-01-08', incidents: 12, resolved: 10, mttr: 145 },
-    { date: '2024-01-09', incidents: 8, resolved: 7, mttr: 132 },
-    { date: '2024-01-10', incidents: 15, resolved: 13, mttr: 167 },
-    { date: '2024-01-11', incidents: 6, resolved: 6, mttr: 98 },
-    { date: '2024-01-12', incidents: 11, resolved: 9, mttr: 156 },
-    { date: '2024-01-13', incidents: 9, resolved: 8, mttr: 143 },
-    { date: '2024-01-14', incidents: 14, resolved: 12, mttr: 178 },
+  // Mock data for charts
+  const incidentTrendData = [
+    { time: '00:00', high_cpu: 4, memory_leak: 2, disk_full: 1, network: 3 },
+    { time: '04:00', high_cpu: 3, memory_leak: 1, disk_full: 2, network: 2 },
+    { time: '08:00', high_cpu: 7, memory_leak: 4, disk_full: 1, network: 5 },
+    { time: '12:00', high_cpu: 5, memory_leak: 3, disk_full: 3, network: 4 },
+    { time: '16:00', high_cpu: 8, memory_leak: 2, disk_full: 2, network: 6 },
+    { time: '20:00', high_cpu: 6, memory_leak: 5, disk_full: 1, network: 3 },
   ];
 
-  const incidentTypesTrend = [
-    { month: 'Oct', high_cpu: 45, memory_leak: 32, disk_full: 28, network: 15 },
-    { month: 'Nov', high_cpu: 38, memory_leak: 28, disk_full: 25, network: 12 },
-    { month: 'Dec', high_cpu: 42, memory_leak: 35, disk_full: 22, network: 18 },
-    { month: 'Jan', high_cpu: 35, memory_leak: 28, disk_full: 20, network: 17 },
+  const resolutionTimeData = [
+    { name: 'Under 1 min', value: 45, color: '#52c41a' },
+    { name: '1-5 min', value: 32, color: '#1890ff' },
+    { name: '5-15 min', value: 18, color: '#faad14' },
+    { name: 'Over 15 min', value: 5, color: '#ff4d4f' },
   ];
 
-  const remediationSuccess = [
-    { action: 'Restart Service', success: 95, failed: 5 },
-    { action: 'Clean Logs', success: 98, failed: 2 },
-    { action: 'Scale Horizontally', success: 87, failed: 13 },
-    { action: 'Fix Permissions', success: 76, failed: 24 },
-    { action: 'Restart Database', success: 83, failed: 17 },
+  const servicePerformanceData = [
+    { service: 'web-server', incidents: 45, resolved: 42, success_rate: 93.3 },
+    { service: 'api-service', incidents: 38, resolved: 35, success_rate: 92.1 },
+    { service: 'database', incidents: 32, resolved: 30, success_rate: 93.8 },
+    { service: 'cache-service', incidents: 25, resolved: 23, success_rate: 92.0 },
+    { service: 'worker', incidents: 16, resolved: 12, success_rate: 75.0 },
   ];
 
-  const costSavings = [
-    { month: 'Oct', manual_cost: 15000, automated_cost: 3200, savings: 11800 },
-    { month: 'Nov', manual_cost: 18000, automated_cost: 3800, savings: 14200 },
-    { month: 'Dec', manual_cost: 16500, automated_cost: 3500, savings: 13000 },
-    { month: 'Jan', manual_cost: 14000, automated_cost: 2800, savings: 11200 },
-  ];
-
-  const colors = ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1'];
+  const colors = ['#1890ff', '#52c41a', '#faad14', '#ff4d4f', '#722ed1'];
 
   return (
-    <div>
-      {/* Controls */}
-      <Card style={{ marginBottom: 24 }}>
-        <Space>
-          <Select
-            value={timeRange}
-            onChange={setTimeRange}
-            style={{ width: 120 }}
-          >
-            <Option value="7d">Last 7 days</Option>
-            <Option value="30d">Last 30 days</Option>
-            <Option value="90d">Last 90 days</Option>
-          </Select>
-          <RangePicker />
-          <Select
-            value={selectedMetric}
-            onChange={setSelectedMetric}
-            style={{ width: 150 }}
-          >
-            <Option value="incidents">Incidents</Option>
-            <Option value="performance">Performance</Option>
-            <Option value="costs">Cost Analysis</Option>
-          </Select>
-        </Space>
-      </Card>
-
-      {/* Key Performance Indicators */}
+    <div style={{ padding: '24px' }}>
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={12} lg={6}>
+        <Col span={24}>
           <Card>
-            <Statistic
-              title="MTTR Improvement"
-              value={75}
-              precision={1}
-              suffix="%"
-              prefix={<TrendingDownOutlined />}
-              valueStyle={{ color: '#52c41a' }}
-            />
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              vs. previous period
-            </div>
+            <Space>
+              <span>Time Range:</span>
+              <Select
+                value={timeRange}
+                onChange={setTimeRange}
+                style={{ width: 120 }}
+              >
+                <Option value="1h">Last Hour</Option>
+                <Option value="24h">Last 24h</Option>
+                <Option value="7d">Last 7 days</Option>
+                <Option value="30d">Last 30 days</Option>
+              </Select>
+              <RangePicker showTime />
+            </Space>
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+      </Row>
+
+      {/* Key Metrics */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="Auto-Resolution Rate"
-              value={78.5}
-              precision={1}
-              suffix="%"
-              prefix={<CheckCircleOutlined />}
+              title="Total Incidents"
+              value={156}
+              prefix={<ArrowUpOutlined />}
               valueStyle={{ color: '#1890ff' }}
             />
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              +5.2% from last month
-            </div>
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="Cost Savings"
-              value={12000}
-              prefix="$"
-              suffix="/month"
+              title="Auto-Resolved"
+              value={142}
+              prefix={<CheckCircleOutlined />}
               valueStyle={{ color: '#52c41a' }}
+              suffix="/ 156"
             />
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              Through automation
-            </div>
           </Card>
         </Col>
-        <Col xs={24} sm12 lg={6}>
+        <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="False Positive Rate"
-              value={2.1}
-              precision={1}
+              title="Avg Resolution Time"
+              value={245}
+              prefix={<ClockCircleOutlined />}
+              suffix="sec"
+              valueStyle={{ color: '#faad14' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Card>
+            <Statistic
+              title="Success Rate"
+              value={91.0}
+              prefix={<ArrowUpOutlined />}
               suffix="%"
-              prefix={<TrendingDownOutlined />}
               valueStyle={{ color: '#52c41a' }}
             />
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              ML model accuracy: 97.9%
-            </div>
           </Card>
         </Col>
       </Row>
 
-      {/* Performance Trends */}
+      {/* Incident Trends */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} lg={16}>
-          <Card title="Incident Resolution Performance">
+        <Col span={24}>
+          <Card title="Incident Trends by Type">
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={performanceData}>
+              <AreaChart data={incidentTrendData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis yAxisId="left" />
-                <YAxis yAxisId="right" orientation="right" />
-                <Tooltip />
-                <Legend />
-                <Bar yAxisId="left" dataKey="incidents" fill="#ff4d4f" name="New Incidents" />
-                <Bar yAxisId="left" dataKey="resolved" fill="#52c41a" name="Resolved" />
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="mttr"
-                  stroke="#1890ff"
-                  strokeWidth={3}
-                  name="MTTR (seconds)"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card title="Remediation Success Rate">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={remediationSuccess} layout="horizontal">
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" />
-                <YAxis dataKey="action" type="category" width={100} />
-                <Tooltip />
-                <Bar dataKey="success" stackId="a" fill="#52c41a" />
-                <Bar dataKey="failed" stackId="a" fill="#ff4d4f" />
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Incident Types Analysis */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} lg={12}>
-          <Card title="Incident Types Trend">
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={incidentTypesTrend}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
+                <XAxis dataKey="time" />
                 <YAxis />
                 <Tooltip />
                 <Legend />
@@ -245,61 +174,82 @@ const Analytics = () => {
             </ResponsiveContainer>
           </Card>
         </Col>
+      </Row>
+
+      {/* Resolution Time and Service Performance */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} lg={12}>
-          <Card title="Cost Analysis">
+          <Card title="Resolution Time Distribution">
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={costSavings}>
+              <PieChart>
+                <Pie
+                  data={resolutionTimeData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {resolutionTimeData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card title="Service Performance">
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={servicePerformanceData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
+                <XAxis dataKey="service" />
                 <YAxis />
-                <Tooltip formatter={(value) => `$${value.toLocaleString()}`} />
+                <Tooltip />
                 <Legend />
-                <Bar dataKey="manual_cost" fill="#ff4d4f" name="Manual Cost" />
-                <Bar dataKey="automated_cost" fill="#1890ff" name="Automated Cost" />
-                <Bar dataKey="savings" fill="#52c41a" name="Savings" />
+                <Bar dataKey="incidents" fill={colors[0]} name="Total Incidents" />
+                <Bar dataKey="resolved" fill={colors[1]} name="Resolved" />
               </BarChart>
             </ResponsiveContainer>
           </Card>
         </Col>
       </Row>
 
-      {/* Detailed Metrics */}
-      <Card title="Detailed Performance Metrics">
-        <Row gutter={[16, 16]}>
-          <Col xs={24} md={8}>
-            <Card size="small" title="Resolution Time Distribution">
-              <div style={{ textAlign: 'center' }}>
-                <div>< 1 minute: <strong>45%</strong></div>
-                <div>1-5 minutes: <strong>32%</strong></div>
-                <div>5-15 minutes: <strong>18%</strong></div>
-                <div>> 15 minutes: <strong>5%</strong></div>
-              </div>
-            </Card>
-          </Col>
-          <Col xs={24} md={8}>
-            <Card size="small" title="Top Affected Services">
-              <div>
-                <div>web-server-prod: <strong>28 incidents</strong></div>
-                <div>api-gateway: <strong>22 incidents</strong></div>
-                <div>database-primary: <strong>18 incidents</strong></div>
-                <div>cache-service: <strong>15 incidents</strong></div>
-                <div>worker-queue: <strong>12 incidents</strong></div>
-              </div>
-            </Card>
-          </Col>
-          <Col xs={24} md={8}>
-            <Card size="small" title="ML Model Performance">
-              <div>
-                <div>Accuracy: <strong>87.1%</strong></div>
-                <div>Precision: <strong>89.3%</strong></div>
-                <div>Recall: <strong>85.7%</strong></div>
-                <div>F1-Score: <strong>87.4%</strong></div>
-                <div>Last Updated: <strong>2 hours ago</strong></div>
-              </div>
-            </Card>
-          </Col>
-        </Row>
-      </Card>
+      {/* Additional Analytics */}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} md={8}>
+          <Card size="small" title="Resolution Time Distribution">
+            <div style={{ textAlign: 'center' }}>
+              <div>Under 1 minute: <strong>45%</strong></div>
+              <div>1-5 minutes: <strong>32%</strong></div>
+              <div>5-15 minutes: <strong>18%</strong></div>
+              <div>Over 15 minutes: <strong>5%</strong></div>
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card size="small" title="Top Affected Services">
+            <div>
+              <div>web-server: <strong>45 incidents</strong></div>
+              <div>api-service: <strong>38 incidents</strong></div>
+              <div>database: <strong>32 incidents</strong></div>
+              <div>cache-service: <strong>25 incidents</strong></div>
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card size="small" title="Auto-Remediation Success">
+            <div style={{ textAlign: 'center' }}>
+              <div>Successful: <strong>91.0%</strong></div>
+              <div>Failed: <strong>6.4%</strong></div>
+              <div>Manual: <strong>2.6%</strong></div>
+            </div>
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 };

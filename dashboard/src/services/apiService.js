@@ -33,8 +33,40 @@ class ApiService {
 
   // Incident Management
   async getIncidents(timeRange = '24h') {
-    // Mock data for demonstration - replace with actual API call
-    return this.generateMockIncidents();
+    try {
+      return await this.request('/api/incidents');
+    } catch (error) {
+      console.warn('Failed to fetch real incidents, using mock data:', error);
+      return this.generateMockIncidents();
+    }
+  }
+
+  async getDashboardData() {
+    try {
+      return await this.request('/api/dashboard');
+    } catch (error) {
+      console.warn('Failed to fetch dashboard data, using mock data:', error);
+      return {
+        stats: {
+          totalIncidents: 0,
+          activeIncidents: 0,
+          resolvedToday: 0,
+          autoRemediationRate: 78.5,
+          avgResolutionTime: 245,
+          systemHealth: 94.2
+        },
+        recentIncidents: []
+      };
+    }
+  }
+
+  async getSystemMetrics() {
+    try {
+      return await this.request('/api/metrics');
+    } catch (error) {
+      console.warn('Failed to fetch system metrics, using mock data:', error);
+      return this.generateMockMetrics();
+    }
   }
 
   async getIncidentById(incidentId) {
@@ -60,13 +92,21 @@ class ApiService {
 
   // System Metrics
   async getMetrics(timeRange = '24h') {
-    // Mock data for demonstration
-    return this.generateMockMetrics();
+    return this.getSystemMetrics();
   }
 
   // ML Model Management
   async getModelStatus() {
-    return this.request('/models');
+    try {
+      return await this.request('/models');
+    } catch (error) {
+      console.warn('Failed to fetch model status:', error);
+      return {
+        available_models: ["xgboost", "lstm", "ensemble"],
+        loaded_models: [],
+        metadata: {}
+      };
+    }
   }
 
   async predictIncidents(logs) {

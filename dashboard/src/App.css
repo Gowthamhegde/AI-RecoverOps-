@@ -1,0 +1,115 @@
+.App {
+  text-align: center;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Dashboard specific styles */
+.dashboard-container {
+  padding: 24px;
+  background: #f0f2f5;
+  min-height: 100vh;
+}
+
+.dashboard-header {
+  background: white;
+  padding: 16px 24px;
+  margin-bottom: 24px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.metric-card {
+  text-align: center;
+  padding: 24px;
+}
+
+.metric-value {
+  font-size: 2.5em;
+  font-weight: bold;
+  color: #1890ff;
+  margin-bottom: 8px;
+}
+
+.metric-label {
+  color: #666;
+  font-size: 14px;
+}
+
+.incident-item {
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.incident-item:last-child {
+  border-bottom: none;
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.status-open {
+  background-color: #ff4d4f;
+  color: white;
+}
+
+.status-investigating {
+  background-color: #faad14;
+  color: white;
+}
+
+.status-resolved {
+  background-color: #52c41a;
+  color: white;
+}
+
+.severity-critical {
+  color: #ff4d4f;
+  font-weight: bold;
+}
+
+.severity-high {
+  color: #fa8c16;
+  font-weight: bold;
+}
+
+.severity-medium {
+  color: #faad14;
+}
+
+.severity-low {
+  color: #52c41a;
+}

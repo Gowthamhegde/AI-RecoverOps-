@@ -1,13 +1,13 @@
 """
-AI-RecoverOps: Automatic Root Cause Fixer
+AI-RecoverOps - Universal DevOps Automation Platform
 """
 
 __version__ = "1.0.0"
 __author__ = "AI-RecoverOps Team"
+__email__ = "team@ai-recoverops.com"
+__description__ = "Universal DevOps Automation Platform with AI-powered incident detection and remediation"
 
-from .core.engine import RecoverOpsEngine
-from .core.detector import BaseDetector
-from .core.analyzer import BaseAnalyzer
-from .core.fixer import BaseFixer
+from .core import AIOpsCore
+from .cli import main
 
-__all__ = ["RecoverOpsEngine", "BaseDetector", "BaseAnalyzer", "BaseFixer"]
+__all__ = ['AIOpsCore', 'main']

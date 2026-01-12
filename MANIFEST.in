@@ -1,0 +1,14 @@
+include README.md
+include README_UNIVERSAL.md
+include LICENSE
+include requirements.txt
+include CHANGELOG.md
+recursive-include ai_recoverops *.py
+recursive-include templates *.yml *.yaml *.json
+recursive-include examples *.yml *.yaml *.json *.py
+recursive-include docs *.md *.rst
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude .DS_Store
+global-exclude *.so
+global-exclude .git*

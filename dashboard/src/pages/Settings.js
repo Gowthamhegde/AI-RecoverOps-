@@ -19,7 +19,7 @@ import {
   SaveOutlined,
   ReloadOutlined,
   UploadOutlined,
-  TestOutlined,
+  ExperimentOutlined,
   SecurityScanOutlined,
 } from '@ant-design/icons';
 
@@ -180,7 +180,7 @@ const Settings = () => {
 
             <Form.Item>
               <Button
-                icon={<TestOutlined />}
+                icon={<ExperimentOutlined />}
                 onClick={() => testConnection('Slack')}
                 loading={testingConnection}
               >
@@ -231,7 +231,7 @@ const Settings = () => {
 
             <Form.Item>
               <Button
-                icon={<TestOutlined />}
+                icon={<ExperimentOutlined />}
                 onClick={() => testConnection('Email')}
                 loading={testingConnection}
               >
@@ -345,7 +345,7 @@ const Settings = () => {
 
             <Form.Item>
               <Button
-                icon={<TestOutlined />}
+                icon={<ExperimentOutlined />}
                 onClick={() => testConnection('AWS')}
                 loading={testingConnection}
               >

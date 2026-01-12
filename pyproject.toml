@@ -1,0 +1,118 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-recoverops"
+version = "1.0.0"
+description = "Universal DevOps Automation Platform with AI-powered incident detection and remediation"
+readme = "README_UNIVERSAL.md"
+license = {text = "MIT"}
+authors = [
+    {name = "AI-RecoverOps Team", email = "team@ai-recoverops.com"}
+]
+maintainers = [
+    {name = "AI-RecoverOps Team", email = "team@ai-recoverops.com"}
+]
+keywords = ["devops", "automation", "monitoring", "remediation", "ai", "infrastructure", "ansible", "terraform"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Monitoring",
+    "Topic :: System :: Networking :: Monitoring",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "click>=8.0.0",
+    "pyyaml>=6.0",
+    "requests>=2.25.0",
+    "jinja2>=3.0.0",
+    "rich>=13.0.0",
+    "typer>=0.9.0",
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "pydantic>=2.4.0",
+    "pandas>=1.5.0",
+    "numpy>=1.21.0",
+    "scikit-learn>=1.1.0",
+    "psutil>=5.8.0",
+]
+
+[project.optional-dependencies]
+aws = ["boto3>=1.26.0", "botocore>=1.29.0"]
+azure = ["azure-mgmt-compute>=29.0.0", "azure-identity>=1.12.0"]
+gcp = ["google-cloud-compute>=1.11.0", "google-auth>=2.16.0"]
+kubernetes = ["kubernetes>=25.0.0"]
+docker = ["docker>=6.0.0"]
+all = [
+    "boto3>=1.26.0",
+    "azure-mgmt-compute>=29.0.0", 
+    "google-cloud-compute>=1.11.0",
+    "kubernetes>=25.0.0",
+    "docker>=6.0.0"
+]
+dev = [
+    "pytest>=7.0.0",
+    "black>=22.0.0",
+    "flake8>=5.0.0",
+    "mypy>=0.991",
+    "pre-commit>=2.20.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/ai-recoverops/ai-recoverops"
+Documentation = "https://docs.ai-recoverops.com"
+Repository = "https://github.com/ai-recoverops/ai-recoverops"
+"Bug Tracker" = "https://github.com/ai-recoverops/ai-recoverops/issues"
+Changelog = "https://github.com/ai-recoverops/ai-recoverops/blob/main/CHANGELOG.md"
+
+[project.scripts]
+aiops = "ai_recoverops.cli:main"
+ai-recoverops = "ai_recoverops.cli:main"
+
+[tool.setuptools]
+packages = ["ai_recoverops"]
+
+[tool.setuptools.package-data]
+ai_recoverops = ["templates/*.yml", "examples/*.yml"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+]

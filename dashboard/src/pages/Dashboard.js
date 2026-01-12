@@ -105,56 +105,48 @@ const Dashboard = ({ socket }) => {
     recentIncidents: [
       {
         id: 'INC-001',
-        type: 'High CPU',
-        service: 'web-server-prod',
+        type: 'high_cpu',
+        service: 'web-server',
         severity: 'critical',
         status: 'resolved',
+        timestamp: '2024-01-15 14:30:00',
         confidence: 0.94,
-        action: 'restart_service',
-        timestamp: '2024-01-15 10:30:00',
-        resolutionTime: 145,
       },
       {
         id: 'INC-002',
-        type: 'Memory Leak',
-        service: 'api-gateway',
+        type: 'memory_leak',
+        service: 'api-service',
         severity: 'high',
         status: 'investigating',
+        timestamp: '2024-01-15 14:25:00',
         confidence: 0.87,
-        action: 'restart_service',
-        timestamp: '2024-01-15 10:25:00',
-        resolutionTime: null,
-      },
-      {
-        id: 'INC-003',
-        type: 'Disk Full',
-        service: 'database-primary',
-        severity: 'medium',
-        status: 'resolved',
-        confidence: 0.92,
-        action: 'clean_logs',
-        timestamp: '2024-01-15 10:20:00',
-        resolutionTime: 89,
       },
     ],
   };
 
+  // Use dashboardData if available, otherwise use mockData
   const data = dashboardData || mockData;
 
+  // Helper function to format time
+  const formatTime = (seconds) => {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+    return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+  };
+
+  // Table columns for recent incidents
   const incidentColumns = [
     {
       title: 'ID',
       dataIndex: 'id',
       key: 'id',
-      width: 100,
+      width: 120,
     },
     {
       title: 'Type',
       dataIndex: 'type',
       key: 'type',
-      render: (type) => (
-        <Tag color="blue">{type}</Tag>
-      ),
+      render: (type) => type.replace('_', ' ').toUpperCase(),
     },
     {
       title: 'Service',
@@ -180,113 +172,86 @@ const Dashboard = ({ socket }) => {
       dataIndex: 'status',
       key: 'status',
       render: (status) => {
-        const icons = {
-          resolved: <CheckCircleOutlined />,
-          investigating: <ClockCircleOutlined />,
-          open: <AlertOutlined />,
-        };
         const colors = {
-          resolved: 'green',
-          investigating: 'blue',
           open: 'red',
+          investigating: 'orange',
+          resolved: 'green',
         };
-        return (
-          <Tag icon={icons[status]} color={colors[status]}>
-            {status.toUpperCase()}
-          </Tag>
-        );
+        return <Tag color={colors[status]}>{status.toUpperCase()}</Tag>;
       },
     },
     {
       title: 'Confidence',
       dataIndex: 'confidence',
       key: 'confidence',
-      render: (confidence) => (
-        <Progress
-          percent={Math.round(confidence * 100)}
-          size="small"
-          status={confidence > 0.8 ? 'success' : 'normal'}
-        />
-      ),
+      render: (confidence) => `${(confidence * 100).toFixed(1)}%`,
     },
     {
-      title: 'Action',
-      dataIndex: 'action',
-      key: 'action',
-      render: (action) => (
-        <Tag icon={<RobotOutlined />} color="purple">
-          {action.replace('_', ' ')}
-        </Tag>
-      ),
-    },
-    {
-      title: 'Resolution Time',
-      dataIndex: 'resolutionTime',
-      key: 'resolutionTime',
-      render: (time) => time ? `${time}s` : '-',
+      title: 'Timestamp',
+      dataIndex: 'timestamp',
+      key: 'timestamp',
     },
   ];
 
-  const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}m ${remainingSeconds}s`;
-  };
+  if (isLoading) {
+    return (
+      <div style={{ padding: '24px', textAlign: 'center' }}>
+        <Card>
+          <p>Loading dashboard data...</p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div>
+    <div style={{ padding: '24px' }}>
       {/* System Status Alert */}
       <Alert
         message="AI-RecoverOps System Status"
-        description={`System is operating normally. ${data.stats.activeIncidents} active incidents being monitored across ${47} services.`}
+        description={`System is operating normally. ${data.stats?.activeIncidents || 0} active incidents being monitored across ${47} services.`}
         type="success"
         showIcon
         style={{ marginBottom: 24 }}
-        action={
-          <Button size="small" type="primary">
-            View Details
-          </Button>
-        }
       />
 
-      {/* Key Metrics */}
+      {/* Key Metrics Cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={24} sm={12} md={8} lg={4}>
           <Card>
             <Statistic
               title="Total Incidents"
-              value={data.stats.totalIncidents}
+              value={data.stats?.totalIncidents || 0}
               prefix={<AlertOutlined />}
               valueStyle={{ color: '#1890ff' }}
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={24} sm={12} md={8} lg={4}>
           <Card>
             <Statistic
               title="Active Incidents"
-              value={data.stats.activeIncidents}
+              value={data.stats?.activeIncidents || 0}
               prefix={<ClockCircleOutlined />}
               valueStyle={{ color: '#faad14' }}
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={24} sm={12} md={8} lg={4}>
           <Card>
             <Statistic
               title="Resolved Today"
-              value={data.stats.resolvedToday}
+              value={data.stats?.resolvedToday || 0}
               prefix={<CheckCircleOutlined />}
               suffix={<ArrowUpOutlined style={{ color: '#52c41a' }} />}
               valueStyle={{ color: '#52c41a' }}
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={24} sm={12} md={8} lg={4}>
           <Card>
             <Statistic
               title="Auto-Remediation Rate"
-              value={data.stats.autoRemediationRate}
+              value={data.stats?.autoRemediationRate || 0}
               precision={1}
               suffix="%"
               prefix={<RobotOutlined />}
@@ -294,36 +259,27 @@ const Dashboard = ({ socket }) => {
             />
           </Card>
         </Col>
-      </Row>
-
-      {/* Performance Metrics */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} lg={12}>
+        <Col xs={24} sm={12} md={8} lg={4}>
           <Card>
             <Statistic
               title="Avg Resolution Time"
-              value={formatTime(data.stats.avgResolutionTime)}
+              value={formatTime(data.stats?.avgResolutionTime || 0)}
               prefix={<ClockCircleOutlined />}
               valueStyle={{ color: '#1890ff' }}
             />
-            <Progress
-              percent={85}
-              strokeColor="#52c41a"
-              format={() => '15% faster than last month'}
-            />
           </Card>
         </Col>
-        <Col xs={24} lg={12}>
+        <Col xs={24} sm={12} md={8} lg={4}>
           <Card>
             <Statistic
               title="System Health Score"
-              value={data.stats.systemHealth}
+              value={data.stats?.systemHealth || 0}
               precision={1}
               suffix="/100"
               valueStyle={{ color: '#52c41a' }}
             />
             <Progress
-              percent={data.stats.systemHealth}
+              percent={data.stats?.systemHealth || 0}
               strokeColor="#52c41a"
               format={(percent) => `${percent}%`}
             />
@@ -331,12 +287,12 @@ const Dashboard = ({ socket }) => {
         </Col>
       </Row>
 
-      {/* Charts */}
+      {/* Charts Row */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} lg={16}>
           <Card title="Incident Trends (Last 24 Hours)" style={{ height: 400 }}>
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={data.incidentTrends}>
+              <AreaChart data={data.incidentTrends || []}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="time" />
                 <YAxis />
@@ -347,7 +303,6 @@ const Dashboard = ({ socket }) => {
                   stackId="1"
                   stroke="#ff4d4f"
                   fill="#ff4d4f"
-                  fillOpacity={0.6}
                   name="New Incidents"
                 />
                 <Area
@@ -356,7 +311,6 @@ const Dashboard = ({ socket }) => {
                   stackId="2"
                   stroke="#52c41a"
                   fill="#52c41a"
-                  fillOpacity={0.6}
                   name="Resolved"
                 />
               </AreaChart>
@@ -368,7 +322,7 @@ const Dashboard = ({ socket }) => {
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
-                  data={data.incidentTypes}
+                  data={data.incidentTypes || []}
                   cx="50%"
                   cy="50%"
                   outerRadius={80}
@@ -376,7 +330,7 @@ const Dashboard = ({ socket }) => {
                   dataKey="value"
                   label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                 >
-                  {data.incidentTypes.map((entry, index) => (
+                  {(data.incidentTypes || []).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -391,30 +345,31 @@ const Dashboard = ({ socket }) => {
       <Card title="Recent Incidents" style={{ marginBottom: 24 }}>
         <Table
           columns={incidentColumns}
-          dataSource={data.recentIncidents}
+          dataSource={data.recentIncidents || []}
           rowKey="id"
           pagination={false}
           size="small"
         />
       </Card>
 
-      {/* Quick Actions */}
-      <Card title="Quick Actions">
-        <Space wrap>
+      {/* Action Buttons */}
+      <Row gutter={[16, 16]}>
+        <Col>
           <Button type="primary" icon={<AlertOutlined />}>
             View All Incidents
           </Button>
+        </Col>
+        <Col>
           <Button icon={<RobotOutlined />}>
-            ML Model Status
+            Configure Auto-Remediation
           </Button>
+        </Col>
+        <Col>
           <Button icon={<CheckCircleOutlined />}>
-            System Health Check
+            System Health Report
           </Button>
-          <Button icon={<ClockCircleOutlined />}>
-            Performance Report
-          </Button>
-        </Space>
-      </Card>
+        </Col>
+      </Row>
     </div>
   );
 };

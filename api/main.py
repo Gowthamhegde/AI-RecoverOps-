@@ -907,15 +907,6 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down AI-RecoverOps API server...")
 
-app = FastAPI(
-    title="AI-RecoverOps Production API",
-    description="Enterprise-grade AIOps platform for automated incident detection and remediation",
-    version="1.0.0",
-    lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc"
-)
-
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -924,102 +915,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Initialize predictor
-predictor = None
-
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
-    """Health check endpoint"""
-    return HealthResponse(
-        status="healthy",
-        timestamp=datetime.now().isoformat(),
-        models_loaded=list(models.keys())
-    )
-
-@app.post("/predict", response_model=PredictionResponse)
-async def predict_incidents(request: PredictionRequest):
-    """Predict incidents from log entries"""
-    start_time = datetime.now()
-    
-    try:
-        if not predictor:
-            raise HTTPException(status_code=503, detail="Models not loaded")
-        
-        # Preprocess logs
-        df = predictor.preprocess_logs(request.logs)
-        
-        # Make predictions based on model type
-        if request.model_type == "xgboost":
-            predictions = predictor.predict_xgboost(df)
-        elif request.model_type == "lstm":
-            predictions = predictor.predict_lstm(df)
-        elif request.model_type == "ensemble":
-            predictions = predictor.predict_ensemble(df)
-        else:
-            raise HTTPException(status_code=400, detail="Invalid model type")
-        
-        # Calculate processing time
-        processing_time = (datetime.now() - start_time).total_seconds() * 1000
-        
-        # Cache results if Redis is available
-        if redis_client:
-            cache_key = f"prediction:{hash(str(request.logs))}"
-            await redis_client.setex(
-                cache_key, 
-                300,  # 5 minutes TTL
-                json.dumps(predictions, default=str)
-            )
-        
-        return PredictionResponse(
-            predictions=predictions,
-            processing_time_ms=processing_time,
-            model_used=request.model_type
-        )
-        
-    except Exception as e:
-        logger.error(f"Prediction error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/predict/batch")
-async def predict_batch(background_tasks: BackgroundTasks, request: PredictionRequest):
-    """Batch prediction for large log volumes"""
-    # For large batches, process in background
-    if len(request.logs) > 1000:
-        # In production, you'd use a task queue like Celery
-        background_tasks.add_task(process_large_batch, request)
-        return {"message": "Batch processing started", "batch_id": str(hash(str(request.logs)))}
-    else:
-        return await predict_incidents(request)
-
-async def process_large_batch(request: PredictionRequest):
-    """Process large batch of logs in background"""
-    # This would typically write results to a database or message queue
-    logger.info(f"Processing batch of {len(request.logs)} logs")
-    # Implementation would go here
-
-@app.get("/models")
-async def list_models():
-    """List available models and their metadata"""
-    return {
-        "available_models": ["xgboost", "lstm", "ensemble"],
-        "loaded_models": list(models.keys()),
-        "metadata": models.get('metadata', {})
-    }
-
-@app.get("/metrics")
-async def get_metrics():
-    """Get API metrics"""
-    # In production, you'd collect real metrics
-    return {
-        "total_predictions": 0,
-        "average_response_time_ms": 0,
-        "model_accuracy": {
-            "xgboost": 0.85,
-            "lstm": 0.82,
-            "ensemble": 0.87
-        }
-    }
 
 if __name__ == "__main__":
     import uvicorn
