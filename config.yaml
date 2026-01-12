@@ -1,0 +1,54 @@
+ai_recoverops:
+  # Core Configuration
+  core:
+    log_level: INFO
+    max_concurrent_fixes: 3
+    rollback_timeout: 300
+    learning_mode: true
+    
+  # Detection Settings
+  detection:
+    interval: 30  # seconds
+    enabled_detectors:
+      - system
+      - application
+      - network
+      - database
+    
+  # Analysis Configuration
+  analysis:
+    confidence_threshold: 0.8
+    max_analysis_time: 120
+    use_historical_data: true
+    
+  # Fix Configuration
+  fixes:
+    auto_apply: false  # Set to true for full automation
+    require_approval: true
+    backup_before_fix: true
+    
+  # Monitoring
+  monitoring:
+    prometheus_port: 9090
+    health_check_port: 8080
+    alert_webhook: null
+    
+  # Machine Learning
+  ml:
+    model_update_interval: 3600
+    training_data_retention: 30  # days
+    feature_extraction_enabled: true
+    
+  # Integrations
+  integrations:
+    elasticsearch:
+      enabled: false
+      host: localhost
+      port: 9200
+    redis:
+      enabled: false
+      host: localhost
+      port: 6379
+    database:
+      enabled: false
+      url: sqlite:///ai_recoverops.db

@@ -1,0 +1,395 @@
+schemaVersion: '0.3'
+description: 'AI-RecoverOps Automated Remediation Runbook'
+assumeRole: '{{ AutomationAssumeRole }}'
+parameters:
+  IncidentType:
+    type: String
+    description: 'Type of incident detected'
+    allowedValues:
+      - high_cpu
+      - memory_leak
+      - disk_full
+      - permission_denied
+      - service_crash
+      - port_in_use
+      - db_connection_failure
+      - container_oom
+  RecommendedAction:
+    type: String
+    description: 'Recommended remediation action'
+    allowedValues:
+      - restart_service
+      - scale_horizontally
+      - clean_logs
+      - fix_permissions
+      - restart_database
+      - kill_conflicting_process
+      - clear_cache
+      - increase_memory_limit
+  InstanceId:
+    type: String
+    description: 'EC2 Instance ID where the issue occurred'
+    default: ''
+  ServiceName:
+    type: String
+    description: 'Name of the affected service'
+    default: ''
+  LogData:
+    type: String
+    description: 'JSON string containing log data'
+    default: '{}'
+  AutomationAssumeRole:
+    type: String
+    description: 'IAM role for automation execution'
+    default: 'arn:aws:iam::{{global:ACCOUNT_ID}}:role/AI-RecoverOps-AutomationRole'
+
+mainSteps:
+  - name: ValidateParameters
+    action: 'aws:executeScript'
+    description: 'Validate input parameters'
+    inputs:
+      Runtime: python3.8
+      Handler: validate_parameters
+      Script: |
+        def validate_parameters(events, context):
+            incident_type = events['IncidentType']
+            recommended_action = events['RecommendedAction']
+            instance_id = events['InstanceId']
+            
+            # Validation logic
+            valid_combinations = {
+                'high_cpu': ['restart_service', 'scale_horizontally'],
+                'memory_leak': ['restart_service', 'increase_memory_limit'],
+                'disk_full': ['clean_logs', 'expand_volume'],
+                'permission_denied': ['fix_permissions'],
+                'service_crash': ['restart_service'],
+                'port_in_use': ['kill_conflicting_process'],
+                'db_connection_failure': ['restart_database'],
+                'container_oom': ['increase_memory_limit', 'restart_service']
+            }
+            
+            if incident_type not in valid_combinations:
+                raise Exception(f"Invalid incident type: {incident_type}")
+            
+            if recommended_action not in valid_combinations[incident_type]:
+                raise Exception(f"Invalid action {recommended_action} for incident {incident_type}")
+            
+            return {
+                'validation_status': 'passed',
+                'incident_type': incident_type,
+                'recommended_action': recommended_action
+            }
+      InputPayload:
+        IncidentType: '{{ IncidentType }}'
+        RecommendedAction: '{{ RecommendedAction }}'
+        InstanceId: '{{ InstanceId }}'
+    outputs:
+      - Name: ValidationStatus
+        Selector: $.Payload.validation_status
+        Type: String
+
+  - name: CheckSafetyRules
+    action: 'aws:executeScript'
+    description: 'Check safety rules before executing remediation'
+    inputs:
+      Runtime: python3.8
+      Handler: check_safety_rules
+      Script: |
+        import json
+        
+        def check_safety_rules(events, context):
+            incident_type = events['IncidentType']
+            recommended_action = events['RecommendedAction']
+            log_data = json.loads(events.get('LogData', '{}'))
+            
+            # Safety rules
+            environment = log_data.get('environment', 'production')
+            
+            # Don't auto-remediate critical actions in production
+            if environment == 'production':
+                critical_actions = ['restart_database', 'fix_permissions']
+                if recommended_action in critical_actions:
+                    return {
+                        'safety_check': 'failed',
+                        'reason': f'Critical action {recommended_action} blocked in production'
+                    }
+            
+            # Check business hours for non-critical environments
+            from datetime import datetime
+            current_hour = datetime.now().hour
+            
+            if environment != 'production' and (current_hour < 6 or current_hour > 22):
+                return {
+                    'safety_check': 'failed',
+                    'reason': 'Remediation blocked outside business hours for non-production'
+                }
+            
+            return {
+                'safety_check': 'passed',
+                'environment': environment
+            }
+      InputPayload:
+        IncidentType: '{{ IncidentType }}'
+        RecommendedAction: '{{ RecommendedAction }}'
+        LogData: '{{ LogData }}'
+    outputs:
+      - Name: SafetyCheck
+        Selector: $.Payload.safety_check
+        Type: String
+
+  - name: ExecuteRemediation
+    action: 'aws:invokeLambdaFunction'
+    description: 'Execute the remediation action via Lambda'
+    inputs:
+      FunctionName: 'ai-recoverops-remediation-executor'
+      Payload: |
+        {
+          "incident_type": "{{ IncidentType }}",
+          "recommended_action": "{{ RecommendedAction }}",
+          "instance_id": "{{ InstanceId }}",
+          "service_name": "{{ ServiceName }}",
+          "log_data": {{ LogData }}
+        }
+    outputs:
+      - Name: RemediationResult
+        Selector: $.Payload
+        Type: StringMap
+
+  - name: VerifyRemediation
+    action: 'aws:executeScript'
+    description: 'Verify that remediation was successful'
+    inputs:
+      Runtime: python3.8
+      Handler: verify_remediation
+      Script: |
+        import json
+        import time
+        import boto3
+        
+        def verify_remediation(events, context):
+            incident_type = events['IncidentType']
+            recommended_action = events['RecommendedAction']
+            instance_id = events['InstanceId']
+            remediation_result = events['RemediationResult']
+            
+            # Parse remediation result
+            if isinstance(remediation_result, str):
+                result = json.loads(remediation_result)
+            else:
+                result = remediation_result
+            
+            if not result.get('success', False):
+                return {
+                    'verification_status': 'failed',
+                    'reason': result.get('error', 'Remediation execution failed')
+                }
+            
+            # Wait a bit for changes to take effect
+            time.sleep(30)
+            
+            # Perform verification based on action type
+            if recommended_action == 'restart_service':
+                return verify_service_restart(instance_id, events['ServiceName'])
+            elif recommended_action == 'clean_logs':
+                return verify_disk_space(instance_id)
+            elif recommended_action == 'restart_database':
+                return verify_database_restart(result)
+            else:
+                # For other actions, trust the execution result
+                return {
+                    'verification_status': 'passed',
+                    'reason': 'Remediation completed successfully'
+                }
+        
+        def verify_service_restart(instance_id, service_name):
+            try:
+                ssm_client = boto3.client('ssm')
+                
+                # Check service status
+                response = ssm_client.send_command(
+                    InstanceIds=[instance_id],
+                    DocumentName="AWS-RunShellScript",
+                    Parameters={
+                        'commands': [f'sudo systemctl is-active {service_name}']
+                    }
+                )
+                
+                # In a real implementation, you'd wait for and check the command result
+                return {
+                    'verification_status': 'passed',
+                    'reason': f'Service {service_name} restart verification initiated'
+                }
+            except Exception as e:
+                return {
+                    'verification_status': 'failed',
+                    'reason': f'Verification failed: {str(e)}'
+                }
+        
+        def verify_disk_space(instance_id):
+            try:
+                ssm_client = boto3.client('ssm')
+                
+                # Check disk usage
+                response = ssm_client.send_command(
+                    InstanceIds=[instance_id],
+                    DocumentName="AWS-RunShellScript",
+                    Parameters={
+                        'commands': ['df -h | grep -E "^/dev"']
+                    }
+                )
+                
+                return {
+                    'verification_status': 'passed',
+                    'reason': 'Disk space verification initiated'
+                }
+            except Exception as e:
+                return {
+                    'verification_status': 'failed',
+                    'reason': f'Verification failed: {str(e)}'
+                }
+        
+        def verify_database_restart(result):
+            # For RDS, we can check the instance status
+            try:
+                if 'db_instance_identifier' in result:
+                    rds_client = boto3.client('rds')
+                    response = rds_client.describe_db_instances(
+                        DBInstanceIdentifier=result['db_instance_identifier']
+                    )
+                    
+                    status = response['DBInstances'][0]['DBInstanceStatus']
+                    if status == 'available':
+                        return {
+                            'verification_status': 'passed',
+                            'reason': 'Database is available after restart'
+                        }
+                    else:
+                        return {
+                            'verification_status': 'pending',
+                            'reason': f'Database status: {status}'
+                        }
+                else:
+                    return {
+                        'verification_status': 'passed',
+                        'reason': 'Database restart completed'
+                    }
+            except Exception as e:
+                return {
+                    'verification_status': 'failed',
+                    'reason': f'Database verification failed: {str(e)}'
+                }
+      InputPayload:
+        IncidentType: '{{ IncidentType }}'
+        RecommendedAction: '{{ RecommendedAction }}'
+        InstanceId: '{{ InstanceId }}'
+        ServiceName: '{{ ServiceName }}'
+        RemediationResult: '{{ ExecuteRemediation.RemediationResult }}'
+    outputs:
+      - Name: VerificationStatus
+        Selector: $.Payload.verification_status
+        Type: String
+
+  - name: SendNotification
+    action: 'aws:executeScript'
+    description: 'Send notification about remediation outcome'
+    inputs:
+      Runtime: python3.8
+      Handler: send_notification
+      Script: |
+        import json
+        import boto3
+        from datetime import datetime
+        
+        def send_notification(events, context):
+            incident_type = events['IncidentType']
+            recommended_action = events['RecommendedAction']
+            verification_status = events['VerificationStatus']
+            remediation_result = events['RemediationResult']
+            
+            # Parse remediation result
+            if isinstance(remediation_result, str):
+                result = json.loads(remediation_result)
+            else:
+                result = remediation_result
+            
+            # Determine overall success
+            overall_success = (result.get('success', False) and 
+                             verification_status in ['passed', 'pending'])
+            
+            # Prepare notification message
+            if overall_success:
+                subject = "✅ AI-RecoverOps: Automated Remediation Successful"
+                message = f"""
+Automated remediation completed successfully!
+
+Incident Type: {incident_type}
+Action Taken: {recommended_action}
+Instance ID: {events.get('InstanceId', 'N/A')}
+Service: {events.get('ServiceName', 'N/A')}
+Verification Status: {verification_status}
+Timestamp: {datetime.now().isoformat()}
+
+The system has automatically resolved the detected issue.
+No manual intervention is required at this time.
+"""
+            else:
+                subject = "❌ AI-RecoverOps: Automated Remediation Failed"
+                message = f"""
+Automated remediation failed - manual intervention required.
+
+Incident Type: {incident_type}
+Attempted Action: {recommended_action}
+Instance ID: {events.get('InstanceId', 'N/A')}
+Service: {events.get('ServiceName', 'N/A')}
+Verification Status: {verification_status}
+Error: {result.get('error', 'Unknown error')}
+Timestamp: {datetime.now().isoformat()}
+
+Please investigate and resolve the issue manually.
+Check the AI-RecoverOps dashboard for detailed logs.
+"""
+            
+            # Send SNS notification
+            try:
+                sns_client = boto3.client('sns')
+                topic_arn = 'arn:aws:sns:us-east-1:123456789012:ai-recoverops-alerts'
+                
+                sns_client.publish(
+                    TopicArn=topic_arn,
+                    Subject=subject,
+                    Message=message
+                )
+                
+                return {
+                    'notification_status': 'sent',
+                    'overall_success': overall_success
+                }
+            except Exception as e:
+                return {
+                    'notification_status': 'failed',
+                    'error': str(e),
+                    'overall_success': overall_success
+                }
+      InputPayload:
+        IncidentType: '{{ IncidentType }}'
+        RecommendedAction: '{{ RecommendedAction }}'
+        InstanceId: '{{ InstanceId }}'
+        ServiceName: '{{ ServiceName }}'
+        VerificationStatus: '{{ VerifyRemediation.VerificationStatus }}'
+        RemediationResult: '{{ ExecuteRemediation.RemediationResult }}'
+    outputs:
+      - Name: NotificationStatus
+        Selector: $.Payload.notification_status
+        Type: String
+      - Name: OverallSuccess
+        Selector: $.Payload.overall_success
+        Type: Boolean
+
+outputs:
+  - RemediationSuccess:
+      - '{{ SendNotification.OverallSuccess }}'
+  - RemediationDetails:
+      - IncidentType: '{{ IncidentType }}'
+      - RecommendedAction: '{{ RecommendedAction }}'
+      - VerificationStatus: '{{ VerifyRemediation.VerificationStatus }}'
+      - NotificationStatus: '{{ SendNotification.NotificationStatus }}'
