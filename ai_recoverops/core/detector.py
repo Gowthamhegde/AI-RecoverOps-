@@ -4,7 +4,7 @@ Base detector interface and common detection utilities
 
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any
-from .engine import Issue
+from .models import Issue
 
 class BaseDetector(ABC):
     """Base class for all issue detectors"""

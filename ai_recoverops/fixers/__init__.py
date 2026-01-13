@@ -18,3 +18,5 @@ def get_fixer_registry():
         'clear_cache': ServiceFixer,
         'enable_rate_limiting': NetworkFixer,
     }
+
+__all__ = ['ServiceFixer', 'ContainerFixer', 'DatabaseFixer', 'NetworkFixer', 'get_fixer_registry']

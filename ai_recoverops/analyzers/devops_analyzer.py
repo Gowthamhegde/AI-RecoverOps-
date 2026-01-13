@@ -5,7 +5,7 @@ DevOps-focused root cause analyzer
 import asyncio
 from typing import Dict, Any, List
 from ..core.analyzer import BaseAnalyzer
-from ..core.engine import Issue, Analysis
+from ..core.models import Issue, Analysis
 from ..utils.logger import get_logger
 
 class DevOpsAnalyzer(BaseAnalyzer):

@@ -4,30 +4,12 @@ Core RecoverOps Engine - Orchestrates detection, analysis, and fixing
 
 import asyncio
 from typing import Dict, List, Any
-from dataclasses import dataclass
 from datetime import datetime
+from .models import Issue, Analysis
 from ..utils.logger import get_logger
 from ..detectors import get_detector_registry
 from ..analyzers import get_analyzer_registry
 from ..fixers import get_fixer_registry
-
-@dataclass
-class Issue:
-    id: str
-    type: str
-    severity: str
-    description: str
-    metadata: Dict[str, Any]
-    detected_at: datetime
-    source: str
-
-@dataclass
-class Analysis:
-    issue_id: str
-    root_cause: str
-    confidence: float
-    recommended_fixes: List[str]
-    analysis_data: Dict[str, Any]
 
 class RecoverOpsEngine:
     def __init__(self, config: Dict[str, Any]):

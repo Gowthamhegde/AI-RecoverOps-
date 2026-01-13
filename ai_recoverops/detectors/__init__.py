@@ -15,3 +15,5 @@ def get_detector_registry():
         'network': NetworkDetector,
         'database': DatabaseDetector,
     }
+
+__all__ = ['SystemDetector', 'ApplicationDetector', 'NetworkDetector', 'DatabaseDetector', 'get_detector_registry']

@@ -4,7 +4,7 @@ Base analyzer interface for root cause analysis
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any
-from .engine import Issue, Analysis
+from .models import Issue, Analysis
 
 class BaseAnalyzer(ABC):
     """Base class for all root cause analyzers"""

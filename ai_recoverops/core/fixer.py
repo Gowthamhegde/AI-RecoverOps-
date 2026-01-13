@@ -1,10 +1,10 @@
 """
-Base fixer interface for automated issue resolution
+Base fixer interface for automated remediation
 """
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any
-from .engine import Issue
+from .models import Issue
 
 class BaseFixer(ABC):
     """Base class for all automated fixers"""
@@ -19,12 +19,7 @@ class BaseFixer(ABC):
         
     @abstractmethod
     async def apply_fix(self, issue: Issue) -> bool:
-        """Apply fix for the issue. Returns True if successful"""
-        pass
-        
-    @abstractmethod
-    async def rollback_fix(self, issue: Issue) -> bool:
-        """Rollback a previously applied fix"""
+        """Apply the fix and return success status"""
         pass
         
     @abstractmethod

@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from typing import List, Dict, Any
 from ..core.detector import BaseDetector
-from ..core.engine import Issue
+from ..core.models import Issue
 from ..utils.logger import get_logger
 
 class ApplicationDetector(BaseDetector):
