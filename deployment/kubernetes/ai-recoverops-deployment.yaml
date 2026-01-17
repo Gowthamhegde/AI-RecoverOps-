@@ -1,0 +1,583 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-recoverops
+  labels:
+    name: ai-recoverops
+    app.kubernetes.io/name: ai-recoverops
+    app.kubernetes.io/version: "2.0.0"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-recoverops-config
+  namespace: ai-recoverops
+data:
+  ENVIRONMENT: "production"
+  DATABASE_URL: "postgresql://airecoverops:password@postgres:5432/airecoverops"
+  REDIS_URL: "redis://redis:6379/0"
+  AWS_REGION: "us-east-1"
+  AUTO_REMEDIATION_ENABLED: "true"
+  MAX_CONCURRENT_REMEDIATIONS: "5"
+  AI_CONFIDENCE_THRESHOLD: "0.8"
+  LOG_LEVEL: "INFO"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ai-recoverops-secrets
+  namespace: ai-recoverops
+type: Opaque
+data:
+  SECRET_KEY: eW91ci1zZWNyZXQta2V5LWNoYW5nZS1pbi1wcm9kdWN0aW9u # base64 encoded
+  OPENAI_API_KEY: "" # Add your OpenAI API key (base64 encoded)
+  GITHUB_TOKEN: "" # Add your GitHub token (base64 encoded)
+  GITLAB_TOKEN: "" # Add your GitLab token (base64 encoded)
+  AWS_ACCESS_KEY_ID: "" # Add your AWS access key (base64 encoded)
+  AWS_SECRET_ACCESS_KEY: "" # Add your AWS secret key (base64 encoded)
+  POSTGRES_PASSWORD: YWlyZWNvdmVyb3BzMTIz # base64 encoded
+  REDIS_PASSWORD: cmVkaXMxMjM= # base64 encoded
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-recoverops-api
+  namespace: ai-recoverops
+  labels:
+    app: ai-recoverops-api
+    component: backend
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ai-recoverops-api
+  template:
+    metadata:
+      labels:
+        app: ai-recoverops-api
+        component: backend
+    spec:
+      serviceAccountName: ai-recoverops-service-account
+      containers:
+      - name: ai-recoverops-api
+        image: ai-recoverops/api:2.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: ai-recoverops-config
+              key: ENVIRONMENT
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: ai-recoverops-config
+              key: DATABASE_URL
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: ai-recoverops-config
+              key: REDIS_URL
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ai-recoverops-secrets
+              key: SECRET_KEY
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ai-recoverops-secrets
+              key: OPENAI_API_KEY
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: ai-recoverops-secrets
+              key: GITHUB_TOKEN
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: ai-recoverops-secrets
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ai-recoverops-secrets
+              key: AWS_SECRET_ACCESS_KEY
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+        - name: models
+          mountPath: /app/models
+      volumes:
+      - name: logs
+        persistentVolumeClaim:
+          claimName: ai-recoverops-logs-pvc
+      - name: models
+        persistentVolumeClaim:
+          claimName: ai-recoverops-models-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-recoverops-api-service
+  namespace: ai-recoverops
+  labels:
+    app: ai-recoverops-api
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: ai-recoverops-api
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: ai-recoverops
+  labels:
+    app: postgres
+    component: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        component: database
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          value: "airecoverops"
+        - name: POSTGRES_USER
+          value: "airecoverops"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ai-recoverops-secrets
+              key: POSTGRES_PASSWORD
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - airecoverops
+            - -d
+            - airecoverops
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - airecoverops
+            - -d
+            - airecoverops
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: ai-recoverops
+  labels:
+    app: postgres
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app: postgres
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: ai-recoverops
+  labels:
+    app: redis
+    component: cache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        component: cache
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        command:
+        - redis-server
+        - --appendonly
+        - "yes"
+        - --requirepass
+        - $(REDIS_PASSWORD)
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ai-recoverops-secrets
+              key: REDIS_PASSWORD
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: redis-data
+        persistentVolumeClaim:
+          claimName: redis-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: ai-recoverops
+  labels:
+    app: redis
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+  selector:
+    app: redis
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-recoverops-dashboard
+  namespace: ai-recoverops
+  labels:
+    app: ai-recoverops-dashboard
+    component: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-recoverops-dashboard
+  template:
+    metadata:
+      labels:
+        app: ai-recoverops-dashboard
+        component: frontend
+    spec:
+      containers:
+      - name: ai-recoverops-dashboard
+        image: ai-recoverops/dashboard:2.0.0
+        ports:
+        - containerPort: 3000
+        env:
+        - name: REACT_APP_API_URL
+          value: "http://ai-recoverops-api-service:8000"
+        - name: REACT_APP_WEBSOCKET_URL
+          value: "ws://ai-recoverops-api-service:8000"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-recoverops-dashboard-service
+  namespace: ai-recoverops
+  labels:
+    app: ai-recoverops-dashboard
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+  selector:
+    app: ai-recoverops-dashboard
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-recoverops-ingress
+  namespace: ai-recoverops
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+  - hosts:
+    - ai-recoverops.yourdomain.com
+    secretName: ai-recoverops-tls
+  rules:
+  - host: ai-recoverops.yourdomain.com
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: ai-recoverops-api-service
+            port:
+              number: 8000
+      - path: /webhooks
+        pathType: Prefix
+        backend:
+          service:
+            name: ai-recoverops-api-service
+            port:
+              number: 8000
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ai-recoverops-dashboard-service
+            port:
+              number: 3000
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: ai-recoverops
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: gp2
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: ai-recoverops
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: gp2
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ai-recoverops-logs-pvc
+  namespace: ai-recoverops
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: efs
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ai-recoverops-models-pvc
+  namespace: ai-recoverops
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: efs
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-recoverops-service-account
+  namespace: ai-recoverops
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ai-recoverops-cluster-role
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints", "persistentvolumeclaims", "events", "configmaps", "secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "daemonsets", "replicasets", "statefulsets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["extensions"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "networkpolicies"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ai-recoverops-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ai-recoverops-cluster-role
+subjects:
+- kind: ServiceAccount
+  name: ai-recoverops-service-account
+  namespace: ai-recoverops
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ai-recoverops-api-hpa
+  namespace: ai-recoverops
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-recoverops-api
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ai-recoverops-api-pdb
+  namespace: ai-recoverops
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: ai-recoverops-api

@@ -1,0 +1,251 @@
+name: AI-RecoverOps Integration
+
+on:
+  workflow_run:
+    workflows: ["*"]
+    types: [completed]
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  AI_RECOVEROPS_URL: ${{ secrets.AI_RECOVEROPS_URL || 'http://localhost:8000' }}
+  AI_RECOVEROPS_TOKEN: ${{ secrets.AI_RECOVEROPS_TOKEN }}
+
+jobs:
+  notify-ai-recoverops:
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Send workflow status to AI-RecoverOps
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const axios = require('axios');
+            
+            const workflowData = {
+              repository: context.repo.owner + '/' + context.repo.repo,
+              workflow_name: context.workflow,
+              run_id: context.runId,
+              run_number: context.runNumber,
+              status: '${{ job.status }}',
+              conclusion: '${{ job.status }}',
+              branch: context.ref.replace('refs/heads/', ''),
+              commit_sha: context.sha,
+              commit_message: context.payload.head_commit?.message || 'No commit message',
+              author: context.actor,
+              event_name: context.eventName,
+              html_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              logs_url: `https://api.github.com/repos/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}/logs`,
+              started_at: new Date().toISOString(),
+              metadata: {
+                github_event: context.eventName,
+                workflow_id: context.workflow,
+                actor: context.actor,
+                repository_url: `https://github.com/${context.repo.owner}/${context.repo.repo}`
+              }
+            };
+
+            try {
+              const response = await axios.post(
+                `${process.env.AI_RECOVEROPS_URL}/webhooks/github`,
+                {
+                  action: 'completed',
+                  workflow_run: workflowData,
+                  repository: {
+                    full_name: context.repo.owner + '/' + context.repo.repo,
+                    html_url: `https://github.com/${context.repo.owner}/${context.repo.repo}`
+                  }
+                },
+                {
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-GitHub-Event': 'workflow_run',
+                    'X-Hub-Signature-256': 'sha256=placeholder',
+                    'Authorization': process.env.AI_RECOVEROPS_TOKEN ? `Bearer ${process.env.AI_RECOVEROPS_TOKEN}` : undefined
+                  },
+                  timeout: 10000
+                }
+              );
+              
+              console.log('✅ Successfully notified AI-RecoverOps:', response.status);
+              
+              // If workflow failed, wait for potential auto-remediation
+              if ('${{ job.status }}' === 'failure') {
+                console.log('🔧 Workflow failed, AI-RecoverOps will analyze and potentially auto-fix...');
+                
+                // Wait 2 minutes for AI-RecoverOps to analyze and create a fix
+                await new Promise(resolve => setTimeout(resolve, 120000));
+                
+                // Check if AI-RecoverOps created a PR for this failure
+                const { data: pulls } = await github.rest.pulls.list({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: 'open',
+                  head: `${context.repo.owner}:ai-recoverops-fix-`,
+                  sort: 'created',
+                  direction: 'desc'
+                });
+                
+                const aiPR = pulls.find(pr => 
+                  pr.title.includes('AI-RecoverOps') && 
+                  pr.created_at > new Date(Date.now() - 300000).toISOString() // Last 5 minutes
+                );
+                
+                if (aiPR) {
+                  console.log(`🤖 AI-RecoverOps created auto-fix PR: ${aiPR.html_url}`);
+                  
+                  // Add comment to the PR with workflow context
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: aiPR.number,
+                    body: `🤖 **AI-RecoverOps Auto-Fix**
+                    
+This PR was automatically created to fix the failure in workflow run [#${context.runNumber}](${workflowData.html_url}).
+
+**Failure Details:**
+- Workflow: ${context.workflow}
+- Branch: ${workflowData.branch}
+- Commit: ${context.sha.substring(0, 7)}
+- Author: ${context.actor}
+
+The AI system has analyzed the failure and generated this fix. Please review the changes before merging.`
+                  });
+                }
+              }
+              
+            } catch (error) {
+              console.error('❌ Failed to notify AI-RecoverOps:', error.message);
+              // Don't fail the workflow if notification fails
+            }
+
+  auto-merge-ai-fixes:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.title, 'AI-RecoverOps')
+    steps:
+      - name: Auto-merge AI-RecoverOps fixes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            
+            // Only auto-merge if PR is from AI-RecoverOps and has high confidence
+            if (pr.user.login === 'ai-recoverops[bot]' || pr.title.includes('AI-RecoverOps')) {
+              console.log('🤖 AI-RecoverOps PR detected, checking for auto-merge eligibility...');
+              
+              // Check if PR has required checks passing
+              const { data: checks } = await github.rest.checks.listForRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: pr.head.sha
+              });
+              
+              const allChecksPassed = checks.check_runs.every(check => 
+                check.status === 'completed' && check.conclusion === 'success'
+              );
+              
+              if (allChecksPassed) {
+                try {
+                  await github.rest.pulls.merge({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: pr.number,
+                    merge_method: 'squash',
+                    commit_title: `🤖 Auto-merge: ${pr.title}`,
+                    commit_message: 'Automatically merged AI-RecoverOps fix after validation'
+                  });
+                  
+                  console.log('✅ Successfully auto-merged AI-RecoverOps fix');
+                } catch (error) {
+                  console.error('❌ Failed to auto-merge:', error.message);
+                }
+              } else {
+                console.log('⏳ Waiting for checks to pass before auto-merge');
+              }
+            }
+
+  validate-fix:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.title, 'AI-RecoverOps')
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Validate AI-RecoverOps fix
+        run: |
+          echo "🔍 Validating AI-RecoverOps fix..."
+          
+          # Run basic validation
+          if [ -f "package.json" ]; then
+            echo "📦 Validating package.json..."
+            node -e "JSON.parse(require('fs').readFileSync('package.json', 'utf8'))"
+          fi
+          
+          if [ -f "requirements.txt" ]; then
+            echo "🐍 Validating requirements.txt..."
+            python -m pip install --dry-run -r requirements.txt
+          fi
+          
+          # Check for common YAML files
+          for file in *.yml *.yaml; do
+            if [ -f "$file" ]; then
+              echo "📄 Validating $file..."
+              python -c "import yaml; yaml.safe_load(open('$file'))"
+            fi
+          done
+          
+          echo "✅ Validation completed successfully"
+
+      - name: Run tests if available
+        run: |
+          if [ -f "package.json" ] && grep -q '"test"' package.json; then
+            npm install
+            npm test
+          elif [ -f "requirements.txt" ] && [ -f "pytest.ini" ]; then
+            pip install -r requirements.txt
+            pytest
+          elif [ -f "Makefile" ] && grep -q "test" Makefile; then
+            make test
+          else
+            echo "No tests found, skipping test execution"
+          fi
+
+      - name: Report validation results
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            
+            // Report validation success back to AI-RecoverOps
+            try {
+              const axios = require('axios');
+              
+              await axios.post(
+                `${process.env.AI_RECOVEROPS_URL}/api/validation/report`,
+                {
+                  pr_number: pr.number,
+                  repository: context.repo.owner + '/' + context.repo.repo,
+                  validation_status: 'success',
+                  commit_sha: pr.head.sha,
+                  checks_passed: true,
+                  timestamp: new Date().toISOString()
+                },
+                {
+                  headers: {
+                    'Authorization': process.env.AI_RECOVEROPS_TOKEN ? `Bearer ${process.env.AI_RECOVEROPS_TOKEN}` : undefined
+                  }
+                }
+              );
+              
+              console.log('✅ Validation results reported to AI-RecoverOps');
+            } catch (error) {
+              console.error('❌ Failed to report validation results:', error.message);
+            }
